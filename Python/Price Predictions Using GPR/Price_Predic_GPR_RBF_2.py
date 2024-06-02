@@ -10,6 +10,7 @@ from ta.momentum import rsi
 from ta.trend import MACD
 from ta.momentum import StochasticOscillator
 from ta.volatility import BollingerBands
+from ta.volatility import AverageTrueRange
 import os
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -41,8 +42,13 @@ bb = BollingerBands(df['close'])
 df['bb_upperband'] = bb.bollinger_hband()
 df['bb_lowerband'] = bb.bollinger_lband()
 
+# Calculate ATR
+atr = AverageTrueRange(df['high'], df['low'], df['close']).average_true_range()
+df['atr'] = atr
+
 # Features and target
-features = df[["open", "high", "low", "close", "volume", "time_diff", "price_diff", "rsi", "macd", "stoch_rsi", "bb_upperband", "bb_lowerband"]]
+features = df[["open", "high", "low", "close", "volume", "time_diff", "price_diff", "rsi", "macd", "stoch_rsi", "bb_upperband", "bb_lowerband", "atr"]]
+
 target = df["close"].shift(-1).ffill()  # Use .ffill() to fill NaN values
 
 # Split data
