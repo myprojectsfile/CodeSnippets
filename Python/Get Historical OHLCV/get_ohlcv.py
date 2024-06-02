@@ -10,7 +10,7 @@ symbol = 'BTC/USDT'
 timeframe = '5m'
 
 # Set start and end times (UTC)
-start_time = datetime.datetime(2024, 5, 31, 0, 0, 0)  # Replace with your desired start time
+start_time = datetime.datetime(2024, 5, 20, 0, 0, 0)  # Replace with your desired start time
 # end_time = datetime.datetime(2023, 10, 26, 12, 0, 0)  # Replace with your desired end time
 
 # Convert timestamps to milliseconds
@@ -34,4 +34,4 @@ df.set_index('open_time', inplace=True)
 
 print(df)
 
-df.to_csv("BTC-5m-500-OHLCV.csv",index=True)
+df.to_csv("BTC-5m-1000-OHLCV.csv",index=True)

@@ -1,8 +1,7 @@
 import pandas as pd
-from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+from sklearn.gaussian_process.kernels import Matern, ConstantKernel as C
 from sklearn.metrics import mean_squared_error
 from sklearn.impute import SimpleImputer
 import numpy as np
@@ -11,8 +10,12 @@ from ta.momentum import rsi
 from ta.trend import MACD
 from ta.momentum import StochasticOscillator
 from ta.volatility import BollingerBands
+import os
 
-data = pd.read_csv('BTC-5m-500-OHLCV.csv')
+script_dir = os.path.dirname(os.path.realpath(__file__))
+read_data_file_path = os.path.join(script_dir, 'BTC-5m-500-OHLCV.csv')
+
+data = pd.read_csv(read_data_file_path)
 
 # Create DataFrame
 df = pd.DataFrame(data, columns=["open_time", "open", "high", "low", "close", "volume"])
@@ -47,11 +50,11 @@ X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=
 
 # Handle missing values
 imputer = SimpleImputer(strategy='mean')
-X_train_imputed = imputer.fit_transform(X_train)
-X_test_imputed = imputer.transform(X_test)
+X_train_imputed = pd.DataFrame(imputer.fit_transform(X_train), columns=X_train.columns)
+X_test_imputed = pd.DataFrame(imputer.transform(X_test), columns=X_test.columns)
 
-# Define and train the model with increased bounds
-kernel = C(1.0, (1e-4, 1e2)) * RBF(1, (1e-4, 1e10))  # Increase upper bound for length_scale to 1e3
+# Define and train the model with Matern kernel
+kernel = C(1.0, (1e-4, 1e2)) * Matern(length_scale=1.0, nu=1.5)  # Matern kernel with nu=1.5
 gpr = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, alpha=1e-2)
 gpr.fit(X_train_imputed, y_train)
 
@@ -93,3 +96,16 @@ baseline_mse = mean_squared_error(y_test, baseline_pred)
 baseline_rmse = np.sqrt(baseline_mse)
 print(f"Baseline Model MSE: {baseline_mse}")
 print(f"Baseline Model RMSE: {baseline_rmse}")
+
+
+# Create DataFrame for results
+results_df = pd.DataFrame({
+    'Real Data': y_test,
+    'Predicted Data': y_pred,
+    'Difference Percent': ((y_test - y_pred) / y_test) * 100
+})
+
+result_file_path = os.path.join(script_dir, 'prediction_result.csv')
+results_df.to_csv(result_file_path, index=False)
+
+                  
