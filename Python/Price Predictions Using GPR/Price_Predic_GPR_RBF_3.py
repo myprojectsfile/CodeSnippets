@@ -1,36 +1,49 @@
 import pandas as pd
-from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 from sklearn.metrics import mean_squared_error
+from sklearn.impute import SimpleImputer
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
-data = pd.read_csv('BTC-5m-500-OHLCV.csv')
+script_dir = os.path.dirname(os.path.realpath(__file__))
+read_data_file_path = os.path.join(script_dir, 'BTC-5m-500-OHLCV.csv')
+
+data = pd.read_csv(read_data_file_path)
 
 # Create DataFrame
 df = pd.DataFrame(data, columns=["open_time", "open", "high", "low", "close", "volume"])
 df["open_time"] = pd.to_datetime(df["open_time"])
 
 # Feature engineering
-df["time_diff"] = df["open_time"].diff().dt.total_seconds().fillna(0)
-df["price_diff"] = df["close"].diff().fillna(0)
+df['sma_5'] = df['close'].rolling(window=5).mean()
+df['sma_10'] = df['close'].rolling(window=10).mean()
+df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+
+# Drop NaN values resulting from rolling calculations
+df.dropna(inplace=True)
 
 # Features and target
-features = df[["open", "high", "low", "close", "volume", "time_diff", "price_diff"]]
+features = df[["open", "high", "low", "close", "volume", "sma_5", "sma_10", "vwap"]]
 target = df["close"].shift(-1).ffill()  # Use .ffill() to fill NaN values
 
 # Split data
 X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
 
+# Handle missing values
+imputer = SimpleImputer(strategy='mean')
+X_train_imputed = pd.DataFrame(imputer.fit_transform(X_train), columns=X_train.columns)
+X_test_imputed = pd.DataFrame(imputer.transform(X_test), columns=X_test.columns)
+
 # Define and train the model with increased bounds
-kernel = C(1.0, (1e-4, 1e2)) * RBF(1, (1e-4, 1e10))  # Increase upper bound for length_scale to 1e3
-gpr = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, alpha=1e-2)
-gpr.fit(X_train, y_train)
+kernel = C(1.0, (1e-4, 1e2)) * RBF(100, (1e-4, 1e10))  # Increase upper bound for length_scale to 1e3
+gpr = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, alpha=0.01)
+gpr.fit(X_train_imputed, y_train)
 
 # Predictions
-y_pred, sigma = gpr.predict(X_test, return_std=True)
+y_pred, sigma = gpr.predict(X_test_imputed, return_std=True)
 mse = mean_squared_error(y_test, y_pred)
 rmse = np.sqrt(mse)
 print(f"Mean Squared Error: {mse}")
@@ -67,3 +80,14 @@ baseline_mse = mean_squared_error(y_test, baseline_pred)
 baseline_rmse = np.sqrt(baseline_mse)
 print(f"Baseline Model MSE: {baseline_mse}")
 print(f"Baseline Model RMSE: {baseline_rmse}")
+
+# Create DataFrame for results
+results_df = pd.DataFrame({
+    'Real Data': y_test,
+    'Predicted Data': y_pred,
+    'Difference' : y_test - y_pred,    
+    'Difference Percent': ((y_test - y_pred) / y_test) * 100
+})
+
+result_file_path = os.path.join(script_dir, 'prediction_result.csv')
+results_df.to_csv(result_file_path, index=False)
